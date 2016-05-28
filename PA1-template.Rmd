@@ -1,0 +1,110 @@
+---
+title: 'Coursera: Reproducable Research Project 1'
+author: "Tim Anderson"
+date: "May 28, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Objective**  
+To answer several questions regarding a set of fitness tracker data  
+
+**Part One:** Bring the data into the R environment
+
+```{r}
+#Get the Data; Note: CSV file resides in working directory
+activity <- read.csv("activity.csv")
+activity$date <- as.Date(activity$date)
+#Set up the environment
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+```
+
+**Part Two:** Calculate the total number of steps per day, plot a histogram, and report the mean & median
+
+```{r}
+        #Summarize data by data
+
+by_day <- activity %>%
+  filter(!is.na(steps)) %>%
+  group_by(date) %>%
+  summarize(steps = sum(steps)) %>%
+  print
+
+ 
+  hist(by_day$steps)
+  mean(by_day$steps) #Mean number of steps per day
+  median(by_day$steps)  #Median number of steps per day
+
+```
+
+
+**Part Three:** Examine the daily activity pattern, plot the mean number of steps by time interval, and identify the time interval with the maximum number of steps
+
+```{r}
+  #Summarize data by five minute interval
+  by_interval <- activity %>%
+      filter(!is.na(steps)) %>%
+      group_by(interval)%>%
+      summarize(avg_steps = mean(steps))
+     
+      
+  qplot(interval, avg_steps, data=by_interval, geom = "line")
+  
+  max_interval <- which(by_interval$avg_steps==max(by_interval$avg_steps)) 
+  #looking for table row numbers where the average steps is equal to the max. 
+  #If there are multiple intervals with that number, they will be repoted below
+  
+  by_interval[max_interval,]
+```
+
+**Part Four:** Impute missing values. My strategy for dealing with missing data will be to replace NAs with the mean for that time interval.
+
+```{r}
+ activity_na_fixed <- activity
+ m <- is.na(activity_na_fixed$steps)
+ sum(m) #Total number of time intervals with NA steps
+
+ #Stategy for dealing with NA steps will be to identify them, and replace with the mean for that interval
+ missing <- which(is.na(activity_na_fixed$steps))
+ 
+ for (i in missing){ #will go through each missing value and find cooresponding mean 
+      x <- which(activity_na_fixed[i,3]==by_interval$interval)
+      activity_na_fixed[i,1] <- by_interval[x,2] 
+ }
+ 
+  by_day2 <- group_by(activity_na_fixed,date)
+  by_day2 <- summarize(by_day2,total_steps = sum(steps,na.rm=TRUE))
+  
+  
+  hist(by_day2$total_steps)
+  mean(by_day2$total_steps) 
+  median(by_day2$total_steps)  
+
+```
+
+Replacing the missing values clearly shifted the histogram, mean and median upward. Interestingly, the mean and median are now equal. This makes sense as I inserted a bunch of numbers right there in the middle of the dataset.
+
+**Part Five:** Weekend versus weekday.  Are there differences in activity patterns?
+
+```{r}
+#adding a column to the dataset, looking at the date to see if it's a Sat or Sun, if so adding weekend, else adding Weekday
+activity_na_fixed <- mutate(activity_na_fixed, weektype = ifelse(weekdays(activity_na_fixed$date) == "Saturday" | weekdays(activity_na_fixed$date) == "Sunday", "weekend", "weekday"))
+activity_na_fixed$weektype <- as.factor(activity_na_fixed$weektype)
+head(activity_na_fixed)
+
+
+by_interval2 <- activity_na_fixed %>%
+  group_by(interval, weektype) %>%
+  summarise(steps = mean(steps))
+
+line_graphs <- ggplot(by_interval2, aes(x=interval, y=steps, color = weektype)) + geom_line() +
+  facet_wrap(~weektype, ncol = 1, nrow=2)
+
+print(line_graphs)
+
+```
